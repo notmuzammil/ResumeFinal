@@ -113,6 +113,9 @@ export default function Results({ results, running, retryCount, onRetry }) {
                       {r.failed_deal_breakers?.length > 0 && (
                         <div className="knockout small">✗ Missing deal-breaker: {r.failed_deal_breakers.join(", ")}</div>
                       )}
+                      {r.unverified_deal_breakers?.length > 0 && (
+                        <div className="check-note small">? Check manually: {r.unverified_deal_breakers.join(", ")}</div>
+                      )}
                       {warnings.length > 0 && <div className="missing-note small">⚠ Missing: {warnings.join(", ")}</div>}
                     </td>
                     <td className="hide-sm">

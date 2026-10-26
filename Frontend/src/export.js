@@ -4,6 +4,7 @@ const COLUMNS = [
   ["Category", (r) => (r.status === "ok" ? r.category : "Error")],
   ["Score", (r) => r.score],
   ["Missing Deal-Breakers", (r) => r.failed_deal_breakers?.join("; ")],
+  ["Deal-Breakers To Check", (r) => r.unverified_deal_breakers?.join("; ")],
   ["Missing Must-Haves", (r) => r.failed_must_haves?.join("; ")],
   ["Skills (/10)", (r) => r.breakdown?.skills.rating],
   ["Experience (/10)", (r) => r.breakdown?.experience.rating],

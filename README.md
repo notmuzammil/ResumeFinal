@@ -13,7 +13,9 @@ It works for any department (technology, finance, sales, HR, operations and so o
    the category. A candidate missing a **Deal-breaker** is Not Suitable whatever the score. The AI pre-ticks only
    formal qualifications the JD strictly requires (a degree, a professional license, a legally required
    certification), never skills or tools, and not when the JD accepts "or equivalent experience". HR can untick
-   them or tick other true requirements. A degree still in progress does not meet a degree deal-breaker.
+   them or tick other true requirements.
+   For a degree, the AI copies its end date and the app checks it against today: a degree still in progress
+   ("Expected 2029", or an end date after today) does not meet the requirement, and one that already ended does.
    After the results come in, **Edit must-haves** goes back to this step.
 3. **Every CV is checked against that reviewed analysis**, so all candidates are judged by the same rules.
    The AI rates Skills, Experience, Education & certifications and Role fit from 0 to 10, checks each must-have
@@ -99,7 +101,10 @@ Open http://localhost:5173.
   reviews the list before screening.
 - A must-have only passes when the AI quotes the resume and the app finds that quote in the resume text. Anything
   the AI can only infer, or whose quote is not on the resume, shows as "?" (unverified): it does not reject the
-  candidate even when it is a deal-breaker, but it is not counted as met either.
+  candidate even when it is a deal-breaker, but it is not counted as met either. An unverified deal-breaker is
+  shown as "? Check manually" on the candidate's row so HR checks the resume. The same happens when the AI skips a
+  requirement, says a degree is unfinished although its end date has passed, or gives a degree date that is not on
+  the resume or falls in the current year without a month.
 
 ## Production
 

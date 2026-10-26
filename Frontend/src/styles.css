@@ -587,6 +587,14 @@ button {
   max-width: 260px;
 }
 
+/* A deal-breaker the AI could not verify: it does not reject, so HR checks the resume */
+.check-note {
+  color: var(--moderate);
+  font-weight: 600;
+  margin-top: 4px;
+  max-width: 260px;
+}
+
 .tag-deal-breaker {
   display: inline-block;
   margin-left: 6px;

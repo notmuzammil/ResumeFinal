@@ -27,12 +27,16 @@ MAX_MUST_HAVES = 6
 MAX_EDITED_MUST_HAVES = 10  # HR may add a few more after reviewing the AI's list
 PRESENT_WORDS = {"present", "current", "now", "till date", "to date", "ongoing"}
 YEARS_PATTERN = re.compile(r"\d+(\.\d+)?\s*\+?\s*(years?|yrs?)\b", re.IGNORECASE)
+DEGREE_WORDS = r"degree|bachelor[’']?s?|master[’']?s|diploma|ph\.?d|doctorate|mba|bba|bsc|msc|bcom|mcom|btech|mtech"
+# A must-have asking for a degree: the app checks from the degree's end date whether it is completed
+DEGREE_PATTERN = re.compile(rf"\b({DEGREE_WORDS})\b", re.IGNORECASE)
 # The AI may only pre-tick formal qualifications (models sometimes tick every must-have); HR can tick anything else
 QUALIFICATION_PATTERN = re.compile(
-    r"\b(degree|bachelor[’']?s?|master[’']?s|diploma|ph\.?d|doctorate|mba|bba|bsc|msc|bcom|mcom|btech|mtech"
-    r"|licen[cs]e[ds]?|certifi\w*|chartered|registered|registration|qualification|acca|cpa|cfa|cima)\b",
+    rf"\b({DEGREE_WORDS}|licen[cs]e[ds]?|certifi\w*|chartered|registered|registration|qualification|acca|cpa|cfa|cima)\b",
     re.IGNORECASE,
 )
+# The AI's evidence when it judged a degree unfinished
+UNFINISHED_PATTERN = re.compile(r"not\s+(yet\s+)?(completed?|finished)|in\s+progress|expected|pursuing|ongoing", re.IGNORECASE)
 # A qualification the JD lets candidates replace ("or equivalent experience") or only prefers is not a deal-breaker
 OPTIONAL_PATTERN = re.compile(r"equivalent\s+(\w+\s+)?experience|\bpreferred\b|\bdesirable\b", re.IGNORECASE)
 # Free API tiers reject bursts with 429; wait 3s, 6s, 12s, 24s before giving up
@@ -127,9 +131,10 @@ Evaluating Requirements & Rules:
 1. EXPERIENCE TOLERANCE: Be realistic. If a candidate has ~3.7 - 3.9 years of relevant experience for a 4-year requirement, treat it as substantially meeting the expectation. Do NOT harshly penalize minor experience gaps if work quality and skills align.
 2. MUST-HAVES EVALUATION:
    - "met" is `true` when the resume names the requirement or a direct, standard equivalent (e.g. MySQL for "SQL databases", ACCA for "professional accounting qualification"). For a requirement with alternatives ("A or B", "A, B or C"), one alternative is enough. Only check that the skill itself appears; how deep or advanced it is belongs in the ratings, not here.
-   - "met" is `false` when the resume does not mention it, or contradicts it. A degree still in progress ("expected 2027") does not meet a degree requirement.
+   - "met" is `false` when the resume does not mention it, or contradicts it. A degree still in progress ("expected 2027") does not meet a degree requirement; a degree that ended before {today} is completed.
    - "met" is `null` when you can only infer it (the candidate "likely", "probably" or "implicitly" has it). Never mark `true` on inference.
    - "evidence": when met is true, copy the exact words from the resume that show it (a short quote, no paraphrasing). Otherwise write "Not mentioned in resume" or explain briefly.
+   - "degree_end": for a requirement asking for a degree, copy the end or graduation date of the candidate's closest matching degree as YYYY-MM or YYYY, or write "Present" or "Expected YYYY" exactly as the resume shows it. Use null for other requirements or when the resume gives no date.
 
 Must-have requirements:
 {must_haves}
@@ -142,7 +147,7 @@ Return JSON with exactly these keys:
   "current_title": "string or null",
   "positions": [{{"title": "string", "company": "string or null", "start": "YYYY-MM", "end": "YYYY-MM or Present", "relevant": true or false}}],
   "ratings": {{"skills": int, "experience": int, "education": int, "fit": int}},
-  "must_haves": [{{"requirement": "copied exactly from the list above", "met": true, false or null, "evidence": "string"}}],
+  "must_haves": [{{"requirement": "copied exactly from the list above", "met": true, false or null, "evidence": "string", "degree_end": "string or null"}}],
   "matched_skills": ["JD requirements the resume clearly shows, by name or a direct equivalent"],
   "missing_skills": ["important JD requirements not found in the resume"],
   "strengths": ["up to 4 short points"],
@@ -326,7 +331,7 @@ def _normalize_resume(data: dict, jd: dict, today: datetime.date, resume_text: s
     relevant = [p for p in positions if p["relevant"]]
     relevant_years = _years(relevant)
 
-    must_haves = _match_must_haves(jd["must_haves"], jd["deal_breakers"], data.get("must_haves"), resume_text)
+    must_haves = _match_must_haves(jd["must_haves"], jd["deal_breakers"], data.get("must_haves"), resume_text, today)
     if jd["min_experience_years"]:
         must_haves.insert(0, _experience_check(jd, relevant, relevant_years))
     failed = [m for m in must_haves if m["met"] is False]
@@ -345,6 +350,8 @@ def _normalize_resume(data: dict, jd: dict, today: datetime.date, resume_text: s
         "category": "Not Suitable" if failed_deal_breakers else categorize(score),
         "failed_must_haves": [m["requirement"] for m in failed],
         "failed_deal_breakers": failed_deal_breakers,
+        # Deal-breakers the AI could not verify do not reject, so HR is asked to check them on the resume
+        "unverified_deal_breakers": [m["requirement"] for m in must_haves if m["deal_breaker"] and m["met"] is None],
         "must_haves": must_haves,
         "breakdown": {key: {"rating": ratings[key], "weight": weights[key]} for key in CRITERIA},
         "matched_skills": _str_list(data.get("matched_skills")),
@@ -409,7 +416,9 @@ def _experience_check(jd: dict, relevant: list[dict], relevant_years: float) -> 
         "deal_breaker": False,  # the minimum years is a warning, never a rejection
     }
 
-def _match_must_haves(expected: list[str], deal_breakers: list[str], returned, resume_text: str) -> list[dict]:
+def _match_must_haves(
+    expected: list[str], deal_breakers: list[str], returned, resume_text: str, today: datetime.date
+) -> list[dict]:
     items = [r for r in returned if isinstance(r, dict)] if isinstance(returned, list) else []
     by_text = {(_str(r.get("requirement")) or "").lower(): r for r in items}
     resume = _compact(resume_text)
@@ -417,17 +426,49 @@ def _match_must_haves(expected: list[str], deal_breakers: list[str], returned, r
     for i, requirement in enumerate(expected):
         # Prefer an exact text match; fall back to position when the model kept the order but reworded
         item = by_text.get(requirement.lower()) or (items[i] if len(items) == len(expected) else None)
-        # None means the model did not or could not check it; that never disqualifies a candidate
-        met = _bool(item.get("met")) if item else None
-        evidence = _str(item.get("evidence")) if item else None
+        if not item:
+            # None means the model did not or could not check it; that never disqualifies a candidate
+            met, evidence = None, "The AI did not check this requirement. Check the resume manually."
+        else:
+            met, evidence = _bool(item.get("met")), _str(item.get("evidence"))
         if met is True and not _quoted_in_resume(evidence, resume):
             # The model claimed a pass but its quote is not on the resume, so the pass is not trusted
             met = None
             evidence = f"Could not verify on the resume. The AI said: {evidence or 'no evidence given'}"
+        if item and DEGREE_PATTERN.search(requirement):
+            met, evidence = _check_degree_end(met, evidence, _str(item.get("degree_end")), resume_text, today)
         result.append(
             {"requirement": requirement, "met": met, "evidence": evidence, "deal_breaker": requirement in deal_breakers}
         )
     return result
+
+def _check_degree_end(met, evidence, degree_end: str | None, resume_text: str, today: datetime.date):
+    """Checks the AI's verdict on a degree requirement against the degree's end date, like experience is."""
+    finished = _degree_finished(degree_end, resume_text, today)
+    if finished is False and met is not False:
+        return False, f"Degree not completed yet ({degree_end}). {evidence or ''}".strip()
+    if finished is True and met is False and UNFINISHED_PATTERN.search(evidence or ""):
+        return None, f"The AI said the degree is not completed, but it ended {degree_end}. Check the resume manually."
+    if finished is None and degree_end and met is True:
+        return None, f"Could not confirm the degree is completed (end date: {degree_end}). Check the resume. {evidence}"
+    return met, evidence
+
+def _degree_finished(degree_end: str | None, resume_text: str, today: datetime.date) -> bool | None:
+    """True or False when the end date shows whether the degree is finished; None when it cannot be told."""
+    text = (degree_end or "").lower()
+    match = re.search(r"(\d{4})(?:-(\d{1,2}))?", text)
+    # The year must be on the resume, so a date the AI made up never rejects anyone
+    if not match or match.group(1) not in resume_text:
+        return None
+    if re.search(r"present|current|expected|pursuing|in progress|ongoing", text):
+        return False
+    year = int(match.group(1))
+    if not match.group(2):
+        # A year alone is unclear in the current year: the degree may end later this year
+        return None if year == today.year else year < today.year
+    now = today.year * 12 + today.month - 1
+    end = _month(match.group(0), now)
+    return None if end is None else end <= now
 
 def _compact(text: str) -> str:
     # Lowercase letters and digits only, so PDF artifacts ("F ull-Stack", one word per line, ligatures) still match
