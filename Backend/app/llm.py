@@ -27,6 +27,14 @@ MAX_MUST_HAVES = 6
 MAX_EDITED_MUST_HAVES = 10  # HR may add a few more after reviewing the AI's list
 PRESENT_WORDS = {"present", "current", "now", "till date", "to date", "ongoing"}
 YEARS_PATTERN = re.compile(r"\d+(\.\d+)?\s*\+?\s*(years?|yrs?)\b", re.IGNORECASE)
+# The AI may only pre-tick formal qualifications (models sometimes tick every must-have); HR can tick anything else
+QUALIFICATION_PATTERN = re.compile(
+    r"\b(degree|bachelor[’']?s?|master[’']?s|diploma|ph\.?d|doctorate|mba|bba|bsc|msc|bcom|mcom|btech|mtech"
+    r"|licen[cs]e[ds]?|certifi\w*|chartered|registered|registration|qualification|acca|cpa|cfa|cima)\b",
+    re.IGNORECASE,
+)
+# A qualification the JD lets candidates replace ("or equivalent experience") or only prefers is not a deal-breaker
+OPTIONAL_PATTERN = re.compile(r"equivalent\s+(\w+\s+)?experience|\bpreferred\b|\bdesirable\b", re.IGNORECASE)
 # Free API tiers reject bursts with 429; wait 3s, 6s, 12s, 24s before giving up
 RATE_LIMIT_RETRIES = 4
 
@@ -55,8 +63,8 @@ JD_PROMPT = """Analyse this job description so that every candidate can be scree
    "min_experience_years" and describe it in "experience_requirement" (e.g. "4+ years of accounting experience").
    Otherwise use null for both. Do not include experience years in "must_haves" (experience will be evaluated separately).
 
-3. List MUST-HAVE requirements. A missing must-have rejects the candidate outright, so keep them few, broad and
-   checkable on a CV. A must-have is something a candidate would list on a CV by name: a degree, license,
+3. List MUST-HAVE requirements. HR can mark a must-have as a deal-breaker that rejects every candidate missing it,
+   so keep them few, broad and checkable on a CV. A must-have is something a candidate would list on a CV by name: a degree, license,
    certification, language, or a core tool, technology or skill area the job cannot be done without.
    - If the JD names a required degree or qualification (often under "Qualification" or "Education"), ALWAYS include
      it, listed first, with the alternatives the JD allows (e.g. "Bachelor's or Master's in Finance or related field").
@@ -75,6 +83,11 @@ JD_PROMPT = """Analyse this job description so that every candidate can be scree
    - When in doubt, leave it out.
    Maximum {max_must_haves}. An empty list is fine.
 
+4. Deal-breakers: copy into "deal_breakers", word for word, only the must-haves that are formal qualifications the
+   JD strictly requires: a degree, a professional license, or a legally required certification. NEVER include
+   skills, tools, technologies, languages, practices or experience. Leave a qualification out when the JD accepts
+   an alternative (e.g. "or equivalent experience") or calls it preferred. An empty list is fine.
+
 Return JSON with exactly these keys:
 {{
   "job_title": "string",
@@ -85,6 +98,7 @@ Return JSON with exactly these keys:
   "min_experience_years": number or null,
   "experience_requirement": "string or null",
   "must_haves": ["string"],
+  "deal_breakers": ["copied exactly from must_haves"],
   "nice_to_haves": ["string"]
 }}
 
@@ -183,7 +197,18 @@ async def analyze_jd(jd_text: str) -> dict:
     if min_years:
         # The model sometimes repeats the years requirement here; it is checked in code instead
         must_haves = [m for m in must_haves if not YEARS_PATTERN.search(m)]
-    return clean_jd_analysis({**data, "min_experience_years": min_years, "must_haves": must_haves[:MAX_MUST_HAVES]})
+    must_haves = must_haves[:MAX_MUST_HAVES]
+    # The AI pre-ticks required degrees and licenses as deal-breakers; HR can untick them while reviewing.
+    # Matched case-insensitively because the model does not always copy the text exactly.
+    by_text = {m.lower(): m for m in must_haves}
+    deal_breakers = [
+        by_text[d.lower()]
+        for d in _str_list(data.get("deal_breakers"))
+        if d.lower() in by_text and QUALIFICATION_PATTERN.search(d) and not OPTIONAL_PATTERN.search(d)
+    ]
+    return clean_jd_analysis(
+        {**data, "min_experience_years": min_years, "must_haves": must_haves, "deal_breakers": deal_breakers}
+    )
 
 def clean_jd_analysis(data) -> dict:
     # Also used on the analysis HR edits in the browser, so every field is checked again
@@ -192,6 +217,7 @@ def clean_jd_analysis(data) -> dict:
     min_years = _number(data.get("min_experience_years"))
     if not min_years or min_years <= 0:
         min_years = None
+    must_haves = list(dict.fromkeys(_str_list(data.get("must_haves"))))[:MAX_EDITED_MUST_HAVES]
     return {
         "job_title": _str(data.get("job_title")) or "Untitled role",
         "department": _str(data.get("department")),
@@ -202,7 +228,9 @@ def clean_jd_analysis(data) -> dict:
         "experience_requirement": (
             _str(data.get("experience_requirement")) or f"Minimum {min_years:g} years of relevant experience"
         ) if min_years else None,
-        "must_haves": list(dict.fromkeys(_str_list(data.get("must_haves"))))[:MAX_EDITED_MUST_HAVES],
+        "must_haves": must_haves,
+        # Only these must-haves reject a candidate; missing any other one is shown as a warning
+        "deal_breakers": [d for d in _str_list(data.get("deal_breakers")) if d in must_haves],
         "nice_to_haves": _str_list(data.get("nice_to_haves"))[:10],
     }
 
@@ -298,10 +326,12 @@ def _normalize_resume(data: dict, jd: dict, today: datetime.date, resume_text: s
     relevant = [p for p in positions if p["relevant"]]
     relevant_years = _years(relevant)
 
-    must_haves = _match_must_haves(jd["must_haves"], data.get("must_haves"), resume_text)
+    must_haves = _match_must_haves(jd["must_haves"], jd["deal_breakers"], data.get("must_haves"), resume_text)
     if jd["min_experience_years"]:
         must_haves.insert(0, _experience_check(jd, relevant, relevant_years))
-    failed = [m["requirement"] for m in must_haves if m["met"] is False]
+    failed = [m for m in must_haves if m["met"] is False]
+    # The category follows the score; only a missing deal-breaker overrides it
+    failed_deal_breakers = [m["requirement"] for m in failed if m["deal_breaker"]]
 
     return {
         "candidate_name": _str(data.get("candidate_name")) or "Unknown",
@@ -312,8 +342,9 @@ def _normalize_resume(data: dict, jd: dict, today: datetime.date, resume_text: s
         "relevant_experience_years": relevant_years if positions else None,
         "positions": [{key: p[key] for key in ("title", "company", "period", "years", "relevant")} for p in positions],
         "score": score,
-        "category": "Not Suitable" if failed else categorize(score),
-        "failed_must_haves": failed,
+        "category": "Not Suitable" if failed_deal_breakers else categorize(score),
+        "failed_must_haves": [m["requirement"] for m in failed],
+        "failed_deal_breakers": failed_deal_breakers,
         "must_haves": must_haves,
         "breakdown": {key: {"rating": ratings[key], "weight": weights[key]} for key in CRITERIA},
         "matched_skills": _str_list(data.get("matched_skills")),
@@ -375,9 +406,10 @@ def _experience_check(jd: dict, relevant: list[dict], relevant_years: float) -> 
         "requirement": jd["experience_requirement"],
         "met": relevant_years >= jd["min_experience_years"],
         "evidence": f"{relevant_years:g} years of relevant experience" + (f": {jobs}" if jobs else " found in resume"),
+        "deal_breaker": False,  # the minimum years is a warning, never a rejection
     }
 
-def _match_must_haves(expected: list[str], returned, resume_text: str) -> list[dict]:
+def _match_must_haves(expected: list[str], deal_breakers: list[str], returned, resume_text: str) -> list[dict]:
     items = [r for r in returned if isinstance(r, dict)] if isinstance(returned, list) else []
     by_text = {(_str(r.get("requirement")) or "").lower(): r for r in items}
     resume = _compact(resume_text)
@@ -392,7 +424,9 @@ def _match_must_haves(expected: list[str], returned, resume_text: str) -> list[d
             # The model claimed a pass but its quote is not on the resume, so the pass is not trusted
             met = None
             evidence = f"Could not verify on the resume. The AI said: {evidence or 'no evidence given'}"
-        result.append({"requirement": requirement, "met": met, "evidence": evidence})
+        result.append(
+            {"requirement": requirement, "met": met, "evidence": evidence, "deal_breaker": requirement in deal_breakers}
+        )
     return result
 
 def _compact(text: str) -> str:

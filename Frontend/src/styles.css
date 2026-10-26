@@ -580,6 +580,35 @@ button {
   max-width: 260px;
 }
 
+/* A missing must-have that is not a deal-breaker: a warning, the category still follows the score */
+.missing-note {
+  color: var(--moderate);
+  margin-top: 4px;
+  max-width: 260px;
+}
+
+.tag-deal-breaker {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  vertical-align: 1px;
+  background: var(--not-soft);
+  color: var(--not);
+}
+
+.deal-breaker-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
 .checklist {
   list-style: none;
   margin: 0;
@@ -615,6 +644,11 @@ button {
 .checklist .fail .check-icon {
   background: var(--not-soft);
   color: var(--not);
+}
+
+.checklist .warn .check-icon {
+  background: var(--moderate-soft);
+  color: var(--moderate);
 }
 
 .checklist .unknown .check-icon {

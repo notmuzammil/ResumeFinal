@@ -3,13 +3,14 @@ export const CATEGORIES = [
   { name: "Highly Suitable", className: "cat-high", above: 77, range: "Score 78–100" },
   { name: "Suitable", className: "cat-suitable", above: 50, range: "Score 51–77" },
   { name: "Moderate", className: "cat-moderate", above: 40, range: "Score 41–50" },
-  { name: "Not Suitable", className: "cat-not", above: -1, range: "40 or under, or missing a must-have" },
+  { name: "Not Suitable", className: "cat-not", above: -1, range: "40 or under, or missing a deal-breaker" },
 ];
 
-// Derived from the score so results already on screen follow the current thresholds
+// Derived from the score so results already on screen follow the current thresholds.
+// Missing must-haves are warnings; only a missing deal-breaker overrides the score.
 export function categorize(result) {
   if (result.status !== "ok") return result;
-  const category = result.failed_must_haves?.length
+  const category = result.failed_deal_breakers?.length
     ? "Not Suitable"
     : CATEGORIES.find((c) => result.score > c.above).name;
   return { ...result, category };

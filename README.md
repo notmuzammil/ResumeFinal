@@ -8,29 +8,33 @@ It works for any department (technology, finance, sales, HR, operations and so o
 1. **The AI reads the JD once.** It decides how much each criterion matters for this role (weights that add up to
    100%), finds the **minimum years of experience**, and lists the other **must-haves**: only mandatory items a
    CV can show, such as degrees, licenses, certifications, specific tools and required languages.
-2. **HR reviews the must-haves before screening.** Each must-have rejects every candidate who does not show it, so
-   HR removes anything that is not a real deal-breaker, fixes the wording, adds what is missing and sets the
-   minimum years of experience. After the results come in, **Edit must-haves** goes back to this step.
+2. **HR reviews the must-haves before screening.** HR fixes the wording, removes what does not matter, adds what is
+   missing and sets the minimum years of experience. A missing must-have is shown as a warning and does not change
+   the category. A candidate missing a **Deal-breaker** is Not Suitable whatever the score. The AI pre-ticks only
+   formal qualifications the JD strictly requires (a degree, a professional license, a legally required
+   certification), never skills or tools, and not when the JD accepts "or equivalent experience". HR can untick
+   them or tick other true requirements. A degree still in progress does not meet a degree deal-breaker.
+   After the results come in, **Edit must-haves** goes back to this step.
 3. **Every CV is checked against that reviewed analysis**, so all candidates are judged by the same rules.
    The AI rates Skills, Experience, Education & certifications and Role fit from 0 to 10, checks each must-have
    with evidence from the CV, and the app calculates the weighted score.
 4. **Experience is calculated by the app, not the AI.** The AI lists each job with its dates and marks whether it
    is relevant to the role. The app counts the months, treating "Present" as today's date and counting overlapping
-   jobs once, and checks the minimum years.
+   jobs once, and checks the minimum years. Being below the minimum is shown as a warning.
 5. **Generic soft skills** (problem solving, communication, teamwork and similar) are never must-haves, even when
    the JD says "required", because almost every CV claims them. They only earn credit when the CV backs them with
    real evidence, such as an achievement.
-6. Each candidate gets a category:
+6. Each candidate gets a category from the score:
 
 | Category        | Rule                                  |
 |-----------------|---------------------------------------|
 | Highly Suitable | Score 78–100                          |
 | Suitable        | Score 51–77                           |
 | Moderate        | Score 41–50                           |
-| Not Suitable    | Score 40 or under, **or below the minimum experience, or missing any must-have** |
+| Not Suitable    | Score 40 or under, **or missing a must-have HR marked as a deal-breaker** |
 
-For each candidate HR sees the must-have check, matched and missing skills, strengths, concerns and a short
-summary. The full shortlist can be exported to Excel (CSV). About 20 CVs take under a minute.
+For each candidate HR sees the must-have check (missing must-haves are listed as warnings, missing deal-breakers
+in red), matched and missing skills, strengths, concerns and a short summary. The full shortlist can be exported to Excel (CSV). About 20 CVs take under a minute.
 
 ```
 Frontend/   React + Vite UI           (http://localhost:5173)
@@ -95,7 +99,7 @@ Open http://localhost:5173.
   reviews the list before screening.
 - A must-have only passes when the AI quotes the resume and the app finds that quote in the resume text. Anything
   the AI can only infer, or whose quote is not on the resume, shows as "?" (unverified): it does not reject the
-  candidate, but it is not counted as met either.
+  candidate even when it is a deal-breaker, but it is not counted as met either.
 
 ## Production
 

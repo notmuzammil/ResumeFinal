@@ -85,6 +85,7 @@ export default function Results({ results, running, retryCount, onRetry }) {
             {visible.map((r) => {
               const rank = sorted.indexOf(r) + 1;
               const isOpen = expanded === r.id;
+              const warnings = r.failed_must_haves?.filter((m) => !r.failed_deal_breakers?.includes(m)) || [];
               return (
                 <Fragment key={r.id}>
                   <tr className={isOpen ? "open" : ""} onClick={() => setExpanded(isOpen ? null : r.id)}>
@@ -109,9 +110,10 @@ export default function Results({ results, running, retryCount, onRetry }) {
                       <span className={`badge ${r.status === "ok" ? categoryClass(r.category) : "cat-error"}`}>
                         {r.status === "ok" ? r.category : "Error"}
                       </span>
-                      {r.failed_must_haves?.length > 0 && (
-                        <div className="knockout small">✗ Missing must-have: {r.failed_must_haves.join(", ")}</div>
+                      {r.failed_deal_breakers?.length > 0 && (
+                        <div className="knockout small">✗ Missing deal-breaker: {r.failed_deal_breakers.join(", ")}</div>
                       )}
+                      {warnings.length > 0 && <div className="missing-note small">⚠ Missing: {warnings.join(", ")}</div>}
                     </td>
                     <td className="hide-sm">
                       {r.relevant_experience_years != null ? (
@@ -165,10 +167,16 @@ function Details({ r }) {
           <h4>Must-have check</h4>
           <ul className="checklist">
             {r.must_haves.map((m) => (
-              <li key={m.requirement} className={m.met === false ? "fail" : m.met ? "pass" : "unknown"}>
+              <li
+                key={m.requirement}
+                className={m.met === false ? (m.deal_breaker ? "fail" : "warn") : m.met ? "pass" : "unknown"}
+              >
                 <span className="check-icon">{m.met === false ? "✗" : m.met ? "✓" : "?"}</span>
                 <div>
-                  <div>{m.requirement}</div>
+                  <div>
+                    {m.requirement}
+                    {m.deal_breaker && <span className="tag-deal-breaker">Deal-breaker</span>}
+                  </div>
                   {m.evidence && <div className="muted small">{m.evidence}</div>}
                 </div>
               </li>
