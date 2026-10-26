@@ -7,25 +7,27 @@ It works for any department (technology, finance, sales, HR, operations and so o
 
 1. **The AI reads the JD once.** It decides how much each criterion matters for this role (weights that add up to
    100%), finds the **minimum years of experience**, and lists the other **must-haves**: only mandatory items a
-   CV can show, such as degrees, licenses, certifications, specific tools and required languages. HR sees this
-   on screen.
-2. **Every CV is checked against that same analysis**, so all candidates are judged by the same rules.
+   CV can show, such as degrees, licenses, certifications, specific tools and required languages.
+2. **HR reviews the must-haves before screening.** Each must-have rejects every candidate who does not show it, so
+   HR removes anything that is not a real deal-breaker, fixes the wording, adds what is missing and sets the
+   minimum years of experience. After the results come in, **Edit must-haves** goes back to this step.
+3. **Every CV is checked against that reviewed analysis**, so all candidates are judged by the same rules.
    The AI rates Skills, Experience, Education & certifications and Role fit from 0 to 10, checks each must-have
    with evidence from the CV, and the app calculates the weighted score.
-3. **Experience is calculated by the app, not the AI.** The AI lists each job with its dates and marks whether it
+4. **Experience is calculated by the app, not the AI.** The AI lists each job with its dates and marks whether it
    is relevant to the role. The app counts the months, treating "Present" as today's date and counting overlapping
    jobs once, and checks the minimum years.
-4. **Generic soft skills** (problem solving, communication, teamwork and similar) are never must-haves, even when
+5. **Generic soft skills** (problem solving, communication, teamwork and similar) are never must-haves, even when
    the JD says "required", because almost every CV claims them. They only earn credit when the CV backs them with
    real evidence, such as an achievement.
-5. Each candidate gets a category:
+6. Each candidate gets a category:
 
 | Category        | Rule                                  |
 |-----------------|---------------------------------------|
-| Highly Suitable | Score 80–100                          |
-| Suitable        | Score 60–79                           |
-| Moderate        | Score 40–59                           |
-| Not Suitable    | Score under 40, **or below the minimum experience, or missing any must-have** |
+| Highly Suitable | Score 78–100                          |
+| Suitable        | Score 51–77                           |
+| Moderate        | Score 41–50                           |
+| Not Suitable    | Score 40 or under, **or below the minimum experience, or missing any must-have** |
 
 For each candidate HR sees the must-have check, matched and missing skills, strengths, concerns and a short
 summary. The full shortlist can be exported to Excel (CSV). About 20 CVs take under a minute.
@@ -87,8 +89,13 @@ Open http://localhost:5173.
 - Results aren't stored anywhere. Export the CSV if you need to keep them.
 - `LLM_CONCURRENCY` (default 3) controls how many resumes are evaluated at the same time. NVIDIA's free tier
   rejects bigger bursts; the app automatically waits and retries when that happens.
-- If the JD lists skills under a heading like "Required:", the AI treats them as must-haves, and candidates
-  missing any of them become Not Suitable. Put optional skills under "Nice to have" or "Preferred".
+- The AI is asked to keep must-haves broad: a required degree is always one, long lists of required tools are
+  grouped by area (e.g. "Node.js/Express or PHP/Laravel backend"), and practices CVs rarely name (security standards,
+  code reviews, load testing) are left to the score. Smaller models do not always follow this, which is why HR
+  reviews the list before screening.
+- A must-have only passes when the AI quotes the resume and the app finds that quote in the resume text. Anything
+  the AI can only infer, or whose quote is not on the resume, shows as "?" (unverified): it does not reject the
+  candidate, but it is not counted as met either.
 
 ## Production
 

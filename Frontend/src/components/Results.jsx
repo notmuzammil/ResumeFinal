@@ -1,24 +1,24 @@
 import { Fragment, useMemo, useState } from "react";
-import { CATEGORIES, CRITERIA, categoryClass, categoryRank } from "../categories.js";
+import { CATEGORIES, CRITERIA, categorize, categoryClass, categoryRank } from "../categories.js";
 import { downloadCsv } from "../export.js";
 
-export default function Results({ results, running }) {
+export default function Results({ results, running, retryCount, onRetry }) {
   const [filter, setFilter] = useState("All");
   const [expanded, setExpanded] = useState(null);
 
   const sorted = useMemo(
     () =>
       // A high scorer missing a must-have is Not Suitable, so rank by category first, then score
-      [...results].sort((a, b) => categoryRank(a) - categoryRank(b) || (b.score ?? -1) - (a.score ?? -1)),
+      results.map(categorize).sort((a, b) => categoryRank(a) - categoryRank(b) || (b.score ?? -1) - (a.score ?? -1)),
     [results]
   );
 
   const counts = useMemo(() => {
-    const c = { All: results.length, Error: 0 };
+    const c = { All: sorted.length, Error: 0 };
     CATEGORIES.forEach((cat) => (c[cat.name] = 0));
-    results.forEach((r) => (r.status === "ok" ? c[r.category]++ : c.Error++));
+    sorted.forEach((r) => (r.status === "ok" ? c[r.category]++ : c.Error++));
     return c;
-  }, [results]);
+  }, [sorted]);
 
   const visible = sorted.filter((r) =>
     filter === "All" ? true : filter === "Error" ? r.status !== "ok" : r.category === filter
@@ -28,9 +28,16 @@ export default function Results({ results, running }) {
     <section className="card">
       <div className="card-header">
         <h2>Shortlist</h2>
-        <button type="button" className="btn secondary" onClick={() => downloadCsv(sorted)} disabled={running || !results.length}>
-          Export to Excel (CSV)
-        </button>
+        <div className="actions">
+          {retryCount > 0 && (
+            <button type="button" className="btn secondary" onClick={onRetry} disabled={running}>
+              Retry {retryCount} failed
+            </button>
+          )}
+          <button type="button" className="btn secondary" onClick={() => downloadCsv(sorted)} disabled={running || !results.length}>
+            Export to Excel (CSV)
+          </button>
+        </div>
       </div>
 
       <div className="summary">

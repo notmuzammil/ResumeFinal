@@ -1,9 +1,19 @@
+// Keep thresholds in sync with categorize() in Backend/app/llm.py
 export const CATEGORIES = [
-  { name: "Highly Suitable", className: "cat-high", range: "Score 80–100" },
-  { name: "Suitable", className: "cat-suitable", range: "Score 60–79" },
-  { name: "Moderate", className: "cat-moderate", range: "Score 40–59" },
-  { name: "Not Suitable", className: "cat-not", range: "Under 40 or missing a must-have" },
+  { name: "Highly Suitable", className: "cat-high", above: 77, range: "Score 78–100" },
+  { name: "Suitable", className: "cat-suitable", above: 50, range: "Score 51–77" },
+  { name: "Moderate", className: "cat-moderate", above: 40, range: "Score 41–50" },
+  { name: "Not Suitable", className: "cat-not", above: -1, range: "40 or under, or missing a must-have" },
 ];
+
+// Derived from the score so results already on screen follow the current thresholds
+export function categorize(result) {
+  if (result.status !== "ok") return result;
+  const category = result.failed_must_haves?.length
+    ? "Not Suitable"
+    : CATEGORIES.find((c) => result.score > c.above).name;
+  return { ...result, category };
+}
 
 export const CRITERIA = [
   { key: "skills", label: "Skills" },

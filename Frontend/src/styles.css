@@ -537,6 +537,43 @@ button {
   margin-top: 14px;
 }
 
+.card-review {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.years-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+  margin: 10px 0;
+}
+
+.years-input {
+  width: 110px;
+}
+
+.edit-list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+}
+
+.edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+/* Grows with the text so long must-haves stay readable */
+.edit-input {
+  field-sizing: content;
+  resize: none;
+}
+
 .knockout {
   color: var(--not);
   margin-top: 4px;
